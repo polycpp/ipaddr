@@ -39,11 +39,11 @@ inline std::pair<std::variant<IPv4, IPv6>, int> parseCIDR(const std::string& add
     try {
         auto [v6, bits] = IPv6::parseCIDR(addr);
         return {v6, bits};
-    } catch (...) {
+    } catch (const std::invalid_argument&) {
         try {
             auto [v4, bits] = IPv4::parseCIDR(addr);
             return {v4, bits};
-        } catch (...) {
+        } catch (const std::invalid_argument&) {
             throw std::invalid_argument(
                 "ipaddr: the address has neither IPv6 nor IPv4 CIDR format");
         }

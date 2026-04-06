@@ -9,7 +9,6 @@
 #include <polycpp/ipaddr/ipaddr.hpp>
 #include <polycpp/ipaddr/detail/helpers.hpp>
 
-#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -22,11 +21,8 @@ namespace ipaddr {
 
 inline IPv6::IPv6(const std::array<uint16_t, 8>& parts, const std::string& zoneId)
     : parts_(parts), zoneId_(zoneId) {
-    for (int i = 0; i < 8; i++) {
-        if (parts_[i] > 0xffff) {
-            throw std::invalid_argument("ipaddr: ipv6 part should fit in 16 bits");
-        }
-    }
+    // No validation needed: uint16_t is inherently in [0..0xffff].
+    // Overflow detection happens at the parser level using uint32_t parts.
 }
 
 inline IPv6::IPv6(const std::array<uint8_t, 16>& bytes, const std::string& zoneId)
@@ -158,7 +154,11 @@ inline bool IPv6::isValid(const std::string& addr) {
 }
 
 inline bool IPv6::isIPv6(const std::string& addr) {
-    return parser(addr).has_value();
+    try {
+        return parser(addr).has_value();
+    } catch (...) {
+        return false;
+    }
 }
 
 inline bool IPv6::isValidCIDR(const std::string& addr) {
@@ -176,7 +176,12 @@ inline bool IPv6::isValidCIDR(const std::string& addr) {
 inline std::pair<IPv6, int> IPv6::parseCIDR(const std::string& addr) {
     std::smatch match;
     if (std::regex_match(addr, match, detail::cidrSplitRegex())) {
-        int maskLength = std::stoi(match[2].str());
+        int maskLength;
+        try {
+            maskLength = std::stoi(match[2].str());
+        } catch (...) {
+            throw std::invalid_argument("ipaddr: string is not formatted like an IPv6 CIDR range");
+        }
         if (maskLength >= 0 && maskLength <= 128) {
             return {parse(match[1].str()), maskLength};
         }
@@ -214,9 +219,8 @@ inline IPv6 IPv6::broadcastAddressFromCIDR(const std::string& addr) {
             octets[i] = static_cast<uint8_t>(ipBytes[i] | (maskBytes[i] ^ 255));
         }
         return IPv6(octets);
-    } catch (const std::exception& e) {
-        throw std::invalid_argument(
-            std::string("ipaddr: the address does not have IPv6 CIDR format (") + e.what() + ")");
+    } catch (const std::invalid_argument&) {
+        throw std::invalid_argument("ipaddr: the address does not have IPv6 CIDR format");
     }
 }
 
@@ -231,9 +235,8 @@ inline IPv6 IPv6::networkAddressFromCIDR(const std::string& addr) {
             octets[i] = static_cast<uint8_t>(ipBytes[i] & maskBytes[i]);
         }
         return IPv6(octets);
-    } catch (const std::exception& e) {
-        throw std::invalid_argument(
-            std::string("ipaddr: the address does not have IPv6 CIDR format (") + e.what() + ")");
+    } catch (const std::invalid_argument&) {
+        throw std::invalid_argument("ipaddr: the address does not have IPv6 CIDR format");
     }
 }
 

@@ -107,6 +107,11 @@ TEST(IPv4Test, MatchesCIDRCorrectly) {
     EXPECT_TRUE(addr.match(IPv4::parse("10.4.5.0"), 15));
     EXPECT_FALSE(addr.match(IPv4::parse("10.5.0.2"), 32));
     EXPECT_TRUE(addr.match(addr, 32));
+
+    // Out-of-range cidrBits should not crash (was UB before fix)
+    EXPECT_FALSE(addr.match(addr, 33));
+    EXPECT_FALSE(addr.match(addr, -1));
+    EXPECT_FALSE(addr.match(addr, 999));
 }
 
 TEST(IPv4Test, ParsesIPv4CIDRCorrectly) {
@@ -124,6 +129,8 @@ TEST(IPv4Test, ParsesIPv4CIDRCorrectly) {
     EXPECT_THROW(IPv4::parseCIDR("10.5.0.1"), std::invalid_argument);
     EXPECT_THROW(IPv4::parseCIDR("0.0.0.0/-1"), std::invalid_argument);
     EXPECT_THROW(IPv4::parseCIDR("0.0.0.0/33"), std::invalid_argument);
+    // Huge prefix must throw std::invalid_argument, not std::out_of_range
+    EXPECT_THROW(IPv4::parseCIDR("0.0.0.0/99999999999"), std::invalid_argument);
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -446,6 +453,10 @@ TEST(IPv6Test, MatchesCIDRCorrectly) {
     EXPECT_FALSE(addr.match(IPv6::parse("2001:db9:f500::1"), 40));
     EXPECT_FALSE(addr.match(IPv6::parse("2001:db9:f500::1%z"), 40));
     EXPECT_TRUE(addr.match(addr, 128));
+
+    // Out-of-range cidrBits should not crash (was UB before fix)
+    EXPECT_FALSE(addr.match(addr, 129));
+    EXPECT_FALSE(addr.match(addr, -1));
 }
 
 TEST(IPv6Test, ParsesIPv6CIDRCorrectly) {
@@ -462,6 +473,8 @@ TEST(IPv6Test, ParsesIPv6CIDRCorrectly) {
     EXPECT_THROW(IPv6::parseCIDR("2001:db8:f53a::1"), std::invalid_argument);
     EXPECT_THROW(IPv6::parseCIDR("2001:db8:f53a::1/-1"), std::invalid_argument);
     EXPECT_THROW(IPv6::parseCIDR("2001:db8:f53a::1/129"), std::invalid_argument);
+    // Huge prefix must throw std::invalid_argument, not std::out_of_range
+    EXPECT_THROW(IPv6::parseCIDR("::/99999999999"), std::invalid_argument);
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -641,6 +654,22 @@ TEST(ModuleTest, DetectsIPv4AndIPv6CIDR) {
 TEST(ModuleTest, LargeAndNegativeNumbersNotValid) {
     EXPECT_FALSE(isValid("4999999999"));
     EXPECT_FALSE(isValid("-1"));
+
+    // IPv6 hex group exceeding 32-bit must not be silently truncated
+    EXPECT_FALSE(IPv6::isValid("100000001::"));
+    EXPECT_FALSE(IPv6::isValid("fffffffff::"));
+
+    // Huge hex groups that overflow unsigned long must not crash
+    EXPECT_FALSE(IPv6::isValid("ffffffffffffffff1::"));
+    EXPECT_FALSE(IPv6::isIPv6("ffffffffffffffff1::"));
+    // parse() must throw std::invalid_argument, not std::out_of_range
+    EXPECT_THROW(IPv6::parse("ffffffffffffffff1::"), std::invalid_argument);
+}
+
+TEST(IPv6Test, RejectsDoubleColonExpandingToZeroGroups) {
+    // :: must always represent at least one zero group
+    EXPECT_FALSE(IPv6::isValid("1::2:3:4:5:6:7:8"));
+    EXPECT_FALSE(IPv6::isIPv6("1::2:3:4:5:6:7:8"));
 }
 
 TEST(ModuleTest, DoesNotHangOnLongInput) {

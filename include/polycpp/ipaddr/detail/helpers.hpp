@@ -6,9 +6,9 @@
  * @since 0.1.0
  */
 
-#include <algorithm>
 #include <array>
 #include <cctype>
+#include <climits>
 #include <cstdint>
 #include <optional>
 #include <regex>
@@ -206,6 +206,9 @@ template <typename T, size_t N>
 inline bool matchCIDR(const std::array<T, N>& first,
                       const std::array<T, N>& second,
                       int partSize, int cidrBits) {
+    if (cidrBits < 0 || cidrBits > static_cast<int>(N) * partSize) {
+        return false;
+    }
     int part = 0;
     while (cidrBits > 0) {
         int shift = partSize - cidrBits;
@@ -281,14 +284,18 @@ inline std::optional<ExpandResult> expandIPv6(const std::string& input, int numP
 
     // Build replacement
     int replacementCount = numParts - colonCount;
-    std::string replacement = ":";
-    for (int i = 0; i < replacementCount; i++) {
-        replacement += "0:";
-    }
 
     // Replace :: with the expanded zeros
     auto dcPos = str.find("::");
     if (dcPos != std::string::npos) {
+        // :: must expand to at least one zero group
+        if (replacementCount < 1) {
+            return std::nullopt;
+        }
+        std::string replacement = ":";
+        for (int i = 0; i < replacementCount; i++) {
+            replacement += "0:";
+        }
         str = str.substr(0, dcPos) + replacement + str.substr(dcPos + 2);
     }
 
@@ -309,8 +316,15 @@ inline std::optional<ExpandResult> expandIPv6(const std::string& input, int numP
             // This can happen with malformed input
             parts.push_back(0);
         } else {
-            unsigned long val = std::stoul(token, nullptr, 16);
-            parts.push_back(static_cast<uint32_t>(val));
+            try {
+                unsigned long val = std::stoul(token, nullptr, 16);
+                if (val > static_cast<unsigned long>(UINT32_MAX)) {
+                    return std::nullopt;
+                }
+                parts.push_back(static_cast<uint32_t>(val));
+            } catch (...) {
+                return std::nullopt;
+            }
         }
     }
 

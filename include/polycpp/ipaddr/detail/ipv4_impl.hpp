@@ -9,8 +9,6 @@
 #include <polycpp/ipaddr/ipaddr.hpp>
 #include <polycpp/ipaddr/detail/helpers.hpp>
 
-#include <cmath>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -167,7 +165,12 @@ inline bool IPv4::isValidCIDRFourPartDecimal(const std::string& addr) {
 inline std::pair<IPv4, int> IPv4::parseCIDR(const std::string& addr) {
     std::smatch match;
     if (std::regex_match(addr, match, detail::cidrSplitRegex())) {
-        int maskLength = std::stoi(match[2].str());
+        int maskLength;
+        try {
+            maskLength = std::stoi(match[2].str());
+        } catch (...) {
+            throw std::invalid_argument("ipaddr: string is not formatted like an IPv4 CIDR range");
+        }
         if (maskLength >= 0 && maskLength <= 32) {
             return {parse(match[1].str()), maskLength};
         }
@@ -202,7 +205,7 @@ inline IPv4 IPv4::broadcastAddressFromCIDR(const std::string& addr) {
             octets[i] = static_cast<uint8_t>(ipBytes[i] | (maskBytes[i] ^ 255));
         }
         return IPv4(octets);
-    } catch (...) {
+    } catch (const std::invalid_argument&) {
         throw std::invalid_argument("ipaddr: the address does not have IPv4 CIDR format");
     }
 }
@@ -217,7 +220,7 @@ inline IPv4 IPv4::networkAddressFromCIDR(const std::string& addr) {
             octets[i] = static_cast<uint8_t>(ipBytes[i] & maskBytes[i]);
         }
         return IPv4(octets);
-    } catch (...) {
+    } catch (const std::invalid_argument&) {
         throw std::invalid_argument("ipaddr: the address does not have IPv4 CIDR format");
     }
 }
@@ -309,13 +312,6 @@ inline IPv6 IPv4::toIPv4MappedAddress() const {
 }
 
 inline std::optional<int> IPv4::prefixLengthFromSubnetMask() const {
-    // Table: octet value -> number of trailing zeros
-    static const int zerotable[] = {
-        // index is octet value, value is number of zero bits
-        // Only valid subnet mask octets are: 0,128,192,224,240,248,252,254,255
-    };
-
-    // Use a map approach like the JS version
     auto getZeros = [](uint8_t octet) -> std::optional<int> {
         switch (octet) {
             case 0:   return 8;
