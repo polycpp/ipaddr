@@ -82,9 +82,12 @@ inline std::string subnetMatch(
     const std::vector<std::pair<std::string, std::vector<CIDRRange>>>& rangeList,
     const std::string& defaultName) {
 
-    for (const auto& [rangeName, subnets] : rangeList) {
+    for (const auto& rangeEntry : rangeList) {
+        const auto& rangeName = rangeEntry.first;
+        const auto& subnets = rangeEntry.second;
         for (const auto& subnet : subnets) {
-            const auto& [network, prefix] = subnet;
+            const auto& network = subnet.first;
+            const int prefix = subnet.second;
 
             // Check if address and network are the same kind
             bool sameKind = std::visit([](const auto& addr, const auto& net) -> bool {
