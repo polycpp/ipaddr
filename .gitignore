@@ -3,6 +3,7 @@ build/
 build-*/
 build_*/
 cmake-build-*/
+build.*.log
 
 # Working documents (never committed)
 /internal/
